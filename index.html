@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PixiJS Sound | Pause/Resume Issue Reproduction</title>
+    <script src="main.js" type="module"></script>
+    <style>
+      :root {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue",
+          sans-serif;
+        font-size: 20px;
+        line-height: 1.6;
+        color-scheme: dark light;
+        min-height: 80vh;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+        margin: 0;
+        height: 100%;
+        max-width: 72ch;
+        margin-inline: auto;
+      }
+
+      footer {
+        text-align: center;
+        font-size: 0.75em;
+        padding-block: 2em;
+        opacity: 0.8;
+        margin-top: auto;
+      }
+
+      button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.5em 0.75em;
+        font-size: 0.825em;
+        font-family: inherit;
+        font-weight: 600;
+        line-height: 1;
+        margin: 0;
+        cursor: pointer;
+        border: 1px solid currentColor;
+        border-radius: 0.25em;
+        background-color: transparent;
+        color: inherit;
+        transition: filter 0.2s;
+
+        &:hover {
+          filter: brightness(0.8);
+        }
+      }
+
+      output {
+        --bg-color: slateblue;
+
+        display: block;
+        margin-block: 1em;
+        padding: 1em;
+        font-size: 0.825em;
+        font-family: monospace;
+        white-space: pre;
+        background-color: color-mix(in srgb, var(--bg-color), transparent 80%);
+        border-radius: 0.25em;
+
+        &:empty::after {
+          content: "Start playing the sound to see the progress.";
+        }
+
+        &[data-state="danger"] {
+          --bg-color: tomato;
+        }
+
+        &[data-state="success"] {
+          --bg-color: limegreen;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>PixiJS Sound v4.4.1 | Pause/Resume Issue Reproduction</h1>
+      <p>
+        This is a reproduction of an issue with PixiJS Sound where pausing and
+        resuming a sound does not work as expected. The issue is achieved when
+        working with spritemaps.
+      </p>
+      <p>Issue is related to versions <code>4.x</code> of PixiJS Sound.</p>
+      <ul>
+        <li><code>@pixi/sound</code> version: <code>4.4.1</code></li>
+        <li><code>pixi.js</code> version: <code>6.4.2</code></li>
+      </ul>
+    </header>
+    <section>
+      <h2>There are two main problems:</h2>
+      <ol>
+        <li>
+          <a
+            href="https://github.com/pixijs/sound"
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            <code>@pixi/sound</code>
+          </a>
+          scales its internal <em>_elapsed</em> time according to the length of
+          the entire spritemap, which then causes the jump to the next sound
+          until the entire spritemap ends.
+        </li>
+        <li>
+          <code>@pixi/sound</code> under the hood uses the
+          <a
+            href="https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode"
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            <code>AudioBufferSourceNode</code>
+          </a>
+          API. The API does not have a native <i>pause</i> and
+          <i>resume</i> feature. Therefore, <code>@pixi/sound</code> always
+          creates a new sound source and starts it from the point where it was
+          paused. This is perfectly fine, but as soon as the sound ends, it
+          doesn't create it with the initial offset. This leads to the sound
+          continuing from the last pause point causing unwanted behavior.
+        </li>
+      </ol>
+    </section>
+    <section>
+      <h2>Reproduction</h2>
+      <ol>
+        <li>
+          <p>
+            Click the button below (or press <kbd>S</kbd> on your keyboard) to
+            play the sound. This will also restart the sound if it's already
+            playing.
+          </p>
+          <button id="play">Play (S)</button>
+        </li>
+        <li>
+          <p>
+            Click the button below (or press <kbd>P</kbd> on your keyboard) to
+            pause the sound.
+          </p>
+          <button id="pause">Pause (P)</button>
+        </li>
+        <li>
+          <p>
+            Click the button below (or press <kbd>R</kbd> on your keyboard) to
+            resume the sound.
+          </p>
+          <button id="resume">Resume (R)</button>
+        </li>
+        <li>
+          <p>
+            Try the above steps with <code>elapsed fix</code> enabled. Click the
+            button below (or press <kbd>F</kbd> on your keyboard) to toggle the
+            fix.
+          </p>
+          <button id="toggle-elapsed-fix">Toggle elapsed fix (F)</button>
+        </li>
+      </ol>
+      <section>
+        <h3>Playback info</h3>
+        <output data-state="danger" id="elapsed-fix-state"></output>
+        <output id="progress"></output>
+      </section>
+      <section>
+        <h3>Observations</h3>
+        <p>
+          Observe how the sound behaves when paused and resumed. When it reaches
+          the end of the <code>sound-1</code>, it should start from the
+          beginning of the, but instead it continues to the next sound in the
+          spritemap. You can acheive this "sprite jumping" by pausing and
+          resuming near the end of the sound <i>(around 12th second)</i>.
+        </p>
+        <p>
+          Since the <code>elapsed</code> time is scaled according to the entire
+          spritemap, the sound will jump to the next sound in the spritemap if
+          you pause and resume the sound near the end of the sound.
+        </p>
+        <p>
+          When you enable the <code>elapsed fix</code>, sound skipping issue is
+          resolved. But when you pause and unpause the sound and it reaches its
+          end, instead of starting from the begginning, it continues from the
+          last pause point.
+        </p>
+      </section>
+    </section>
+    <section>
+      <h2>Workaround</h2>
+      <p>
+        The
+        <a
+          href="https://github.com/WebAudio/web-audio-api-v2/issues/105#issuecomment-724089679"
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          known workaround
+        </a>
+        is to use the <code>AudioBufferSourceNode</code> API directly and set
+        the <code>playbackRate</code> property to <code>0</code> when pausing
+        and <code>1</code> when resuming.
+      </p>
+      <p>
+        Click the button below (or press <kbd>W</kbd> on your keyboard) to
+        toggle the workaround.
+      </p>
+      <button id="toggle-workaround">Toggle workaround (W)</button>
+      <output data-state="danger" id="workaround-state"></output>
+    </section>
+    <footer>
+      Created by
+      <a
+        href="https://github.com/nizamiza"
+        target="_blank"
+        rel="noreferrer noopener"
+        >Niza</a
+      >
+      for the <code>@pixi/sound</code> team.
+    </footer>
+  </body>
+</html>
